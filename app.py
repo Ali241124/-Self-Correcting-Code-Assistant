@@ -10,6 +10,10 @@ from database.history import (
     get_run_by_id,
     delete_run
 )
+from integrations.github_client import (
+    get_github_file,
+    update_github_file
+)
 
 # Initialize SQLite database when the application starts
 initialize_database()
@@ -68,6 +72,121 @@ st.write(
 
 st.divider()
 
+
+# ---------------------------------------
+# GITHUB INTEGRATION
+# ---------------------------------------
+
+st.header("🐙 GitHub Integration")
+
+st.write(
+    "Fetch a Python file from your GitHub repository "
+    "and use the AI debugger to analyze it."
+)
+
+with st.expander("Fetch Python file from GitHub", expanded=True):
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        github_owner = st.text_input(
+            "GitHub Username",
+            value="Ali241124",
+            key="github_owner"
+        )
+
+        github_repo = st.text_input(
+            "Repository Name",
+            placeholder="Enter your exact repository name",
+            key="github_repo"
+        )
+
+    with col2:
+        github_branch = st.text_input(
+            "Branch",
+            value="main",
+            key="github_branch"
+        )
+
+        github_file_path = st.text_input(
+            "Python File Path",
+            placeholder="Example: main.py or core/example.py",
+            key="github_file_path"
+        )
+
+    if st.button("📥 Fetch File from GitHub", type="primary"):
+
+        if not all([
+            github_owner.strip(),
+            github_repo.strip(),
+            github_branch.strip(),
+            github_file_path.strip()
+        ]):
+            st.error("Please fill in all GitHub details.")
+
+        elif not github_file_path.lower().endswith(".py"):
+            st.error("Please provide a Python (.py) file.")
+
+        else:
+
+            with st.spinner("Fetching file from GitHub..."):
+
+                github_result = get_github_file(
+                    owner=github_owner.strip(),
+                    repo=github_repo.strip(),
+                    file_path=github_file_path.strip(),
+                    branch=github_branch.strip()
+                )
+
+            if github_result["success"]:
+
+                st.session_state["github_original_code"] = (
+                    github_result["content"]
+                )
+
+                st.session_state["github_file_sha"] = (
+                    github_result["sha"]
+                )
+
+                st.session_state["github_repo_details"] = {
+                    "owner": github_owner.strip(),
+                    "repo": github_repo.strip(),
+                    "branch": github_branch.strip(),
+                    "file_path": github_result["file_path"]
+                }
+
+                # Load fetched code into the existing editor.
+                st.session_state["python_code"] = (
+                    github_result["content"]
+                )
+
+                st.success(github_result["message"])
+
+                st.rerun()
+
+            else:
+                st.error(github_result["message"])
+
+
+# Display fetched GitHub file
+if "github_original_code" in st.session_state:
+
+    st.subheader("Fetched GitHub File")
+
+    st.caption(
+        f"File: {st.session_state['github_file_path']}"
+    )
+
+    st.code(
+        st.session_state["github_original_code"],
+        language="python"
+    )
+
+    st.success(
+        "GitHub file loaded. You can now run the AI debugger below."
+    )
+
+st.divider()
 
 # ---------------------------------------
 # CODE EDITOR
@@ -173,6 +292,14 @@ if run_button:
 
                 st.session_state["last_result"] = result
                 st.session_state["last_run_id"] = run_id
+                # Store results for GitHub code review
+                if "github_original_code" in st.session_state:
+
+                    st.session_state["github_debug_original"] = (
+                        st.session_state["github_original_code"]
+                    )
+
+                    st.session_state["github_debug_result"] = result
 
                 st.success(f"Debugging session #{run_id} saved to history.")
 
@@ -367,6 +494,76 @@ if "last_result" in st.session_state:
                             language="python"
                         )
 
+
+# ---------------------------------------
+# GITHUB CODE REVIEW
+# ---------------------------------------
+
+if "github_debug_result" in st.session_state:
+
+    st.divider()
+
+    st.header("🐙 GitHub Code Review")
+
+    github_result = st.session_state["github_debug_result"]
+
+    original_code = st.session_state["github_debug_original"]
+    corrected_code = github_result["final_code"]
+
+    st.write(
+        "Review the original GitHub source and the AI-corrected "
+        "version before deciding whether to update GitHub."
+    )
+
+    if github_result["success"]:
+        st.success("AI correction and validation completed.")
+    else:
+        st.warning(
+            "The AI correction process did not pass all validations. "
+            "Review the results carefully."
+        )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Original GitHub Code")
+
+        st.code(
+            original_code,
+            language="python"
+        )
+
+    with col2:
+        st.subheader("AI Corrected Code")
+
+        st.code(
+            corrected_code,
+            language="python"
+        )
+
+    st.download_button(
+        "Download Corrected GitHub File",
+        data=corrected_code,
+        file_name="corrected_github_file.py",
+        mime="text/x-python",
+        key="download_github_corrected"
+    )
+
+    with st.expander("View GitHub file information"):
+
+        repo_details = st.session_state.get(
+            "github_repo_details", {}
+        )
+
+        st.write("Repository:", repo_details.get("repo"))
+        st.write("Owner:", repo_details.get("owner"))
+        st.write("Branch:", repo_details.get("branch"))
+        st.write("File:", repo_details.get("file_path"))
+
+        st.write(
+            "Original GitHub SHA:",
+            st.session_state.get("github_file_sha", "Unavailable")
+        )
 
 # ---------------------------------------
 # SECURITY NOTICE
