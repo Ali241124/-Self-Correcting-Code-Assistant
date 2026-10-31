@@ -1,0 +1,34 @@
+
+# Virtual environment
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Database
+*.db
+*.sqlite3
+
+# Temporary files
+workspace/*
+!workspace/.gitkeep
+*.log
+
+# VS Code
+.vscode/
+
+# Streamlit secrets
+.streamlit/secrets.toml
