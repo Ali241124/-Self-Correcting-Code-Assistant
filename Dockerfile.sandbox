@@ -1,0 +1,12 @@
+
+FROM python:3.11-slim
+
+# Install pytest into the reusable sandbox image
+RUN pip install --no-cache-dir pytest
+
+# Use a non-root user
+RUN useradd --uid 10001 --no-create-home sandbox
+
+WORKDIR /workspace
+
+USER sandbox

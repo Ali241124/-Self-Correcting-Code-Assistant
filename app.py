@@ -301,6 +301,14 @@ if run_button:
 
                     st.session_state["github_debug_result"] = result
 
+                    st.session_state["github_debug_sha"] = (
+                        st.session_state["github_file_sha"]
+                    )
+
+                    st.session_state["github_debug_repo_details"] = (
+                        st.session_state["github_repo_details"].copy()
+                    )
+
                 st.success(f"Debugging session #{run_id} saved to history.")
 
         except Exception as error:
@@ -564,6 +572,110 @@ if "github_debug_result" in st.session_state:
             "Original GitHub SHA:",
             st.session_state.get("github_file_sha", "Unavailable")
         )
+
+
+# ---------------------------------------
+# APPROVE AND COMMIT TO GITHUB
+# ---------------------------------------
+
+if "github_debug_result" in st.session_state:
+
+    st.divider()
+
+    st.header("🚀 Commit Corrected Code to GitHub")
+
+    github_debug_result = st.session_state["github_debug_result"]
+
+    original_code = st.session_state["github_debug_original"]
+    corrected_code = github_debug_result["final_code"]
+
+    repo_details = st.session_state["github_debug_repo_details"]
+
+    github_sha = st.session_state["github_debug_sha"]
+
+    code_changed = original_code != corrected_code
+
+    can_commit = (
+        github_debug_result["success"]
+        and code_changed
+        and bool(github_sha)
+        and bool(repo_details)
+    )
+
+    if not github_debug_result["success"]:
+
+        st.error(
+            "The debugging and validation process did not pass. "
+            "Please resolve the validation issues before committing."
+        )
+
+    elif not code_changed:
+
+        st.info(
+            "The corrected code is identical to the original code. "
+            "There are no changes to commit."
+        )
+
+    else:
+
+        st.warning(
+            "You are about to update a file in your GitHub repository. "
+            "Review the corrected code above before approving."
+        )
+
+        commit_message = st.text_input(
+            "Commit Message",
+            value="AI: Fix Python code",
+            key="github_commit_message"
+        )
+
+        approval = st.checkbox(
+            "I have reviewed the corrected code and approve committing it to GitHub.",
+            key="github_commit_approval"
+        )
+
+        if st.button(
+            "✅ Commit Approved Changes to GitHub",
+            type="primary",
+            use_container_width=True,
+            disabled=not (can_commit and approval and commit_message.strip())
+        ):
+
+            with st.spinner("Committing corrected file to GitHub..."):
+
+                commit_result = update_github_file(
+                    owner=repo_details["owner"],
+                    repo=repo_details["repo"],
+                    file_path=repo_details["file_path"],
+                    branch=repo_details["branch"],
+                    content=corrected_code,
+                    sha=github_sha,
+                    commit_message=commit_message.strip()
+                )
+
+            st.session_state["github_commit_result"] = commit_result
+
+            if commit_result["success"]:
+
+                st.success(commit_result["message"])
+
+                st.markdown(
+                    f"**Commit SHA:** `{commit_result['commit_sha']}`"
+                )
+
+                st.markdown(
+                    f"[View commit on GitHub]({commit_result['commit_url']})"
+                )
+
+            else:
+
+                st.error(commit_result["message"])
+
+                st.info(
+                    "If GitHub reports a conflict, the file may have "
+                    "changed since it was fetched. Fetch the latest "
+                    "version and review it again before committing."
+                )
 
 # ---------------------------------------
 # SECURITY NOTICE
